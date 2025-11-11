@@ -1,32 +1,61 @@
-# TikTask
+# TikTask - TP8: Contenedores en la Nube
+
 **Integrantes**: Belén Treachi y Bautista Juncos
 
-TikTask es una aplicación web moderna de gestión de tareas construida con Node.js, Express y SQLite.
+Aplicación web de gestión de tareas construida con Node.js, Express y SQLite, implementada con contenedores Docker y CI/CD completo.
 
-## 🚀 TP8 - Implementación de Contenedores en la Nube
+---
 
-Este proyecto incluye una implementación completa de CI/CD con contenedores Docker:
+## 📚 Documentación del TP8
 
-- **Container Registry**: GitHub Container Registry (ghcr.io)
-- **CI/CD**: GitHub Actions con pipeline automatizado
-- **QA Environment**: Render.com (Free tier) - Deploy automático
-- **Production Environment**: Render.com (Starter tier) - Deploy con aprobación manual
+### 🎯 Para completar el TP8, seguí esta guía paso a paso:
+➡️ **[GUIA_TP8.md](./GUIA_TP8.md)** - Guía completa con instrucciones detalladas
 
-📖 **Documentación completa**: Ver [TP8_IMPLEMENTATION.md](./TP8_IMPLEMENTATION.md)
+### 📋 Consignas originales del TP:
+➡️ **[TP8_consignas.MD](./TP8_consignas.MD)** - Requisitos y consignas del trabajo práctico
 
-### Quick Start con Docker
+---
 
-**Estructura Reorganizada**: El proyecto ahora está organizado en `backend/` y `frontend/` con Dockerfiles separados. Ver [DOCKER_STRUCTURE.md](./DOCKER_STRUCTURE.md) para más detalles.
+## 🚀 Quick Start con Docker
+
+### Probar localmente (recomendado)
 
 ```bash
-# Opción 1: Docker Compose (recomendado - inicia ambos servicios)
+# Iniciar ambos servicios con Docker Compose
 docker-compose up --build
+```
 
-# Opción 2: Construir y ejecutar contenedores individualmente
+Acceder a: **http://localhost**
+
+### Arquitectura del Proyecto
+
+```
+TP08_CloudContainers_IS3/
+├── backend/              # API Node.js + Express
+│   ├── Dockerfile       # Imagen Docker del backend
+│   └── ...
+├── frontend/            # Frontend HTML/CSS/JS + Nginx
+│   ├── Dockerfile       # Imagen Docker del frontend
+│   └── ...
+├── docker-compose.yml   # Orquestación de servicios
+└── .github/workflows/   # CI/CD con GitHub Actions
+```
+
+### Opciones de ejecución
+
+**Opción 1: Docker Compose (recomendado)**
+```bash
+docker-compose up --build
+```
+- Backend: puerto 3000 (interno)
+- Frontend: puerto 80 (http://localhost)
+
+**Opción 2: Contenedores individuales**
+```bash
 # Backend
 cd backend
 docker build -t tiktask-backend .
-docker run -p 3000:3000 -e DATABASE_PATH=/app/data/database.sqlite tiktask-backend
+docker run -p 3000:3000 -e DATABASE_PATH=/app/data/database.sqlite -e JWT_SECRET=dev-secret tiktask-backend
 
 # Frontend (en otra terminal)
 cd frontend
@@ -34,60 +63,49 @@ docker build -t tiktask-frontend .
 docker run -p 80:80 tiktask-frontend
 ```
 
-La aplicación estará disponible en:
-- **Docker Compose**: `http://localhost` (puerto 80)
-- **Contenedores individuales**: Frontend en `http://localhost:80`, Backend en `http://localhost:3000`
+---
 
-## Características
+## 🏗️ Arquitectura TP8
 
-- **Autenticación de Usuarios**: Registro e inicio de sesión con hash seguro de contraseñas (BCrypt)
-- **Gestión de Tareas**: Crear, editar, eliminar y marcar tareas como completadas
-- **Fechas de Vencimiento**: Establecer fechas límite para las tareas
-- **Rol de Administrador**: Los usuarios administradores pueden ver las tareas de todos los usuarios con sus nombres de usuario
-- **Diseño Responsivo**: UI limpia y moderna con HTML/CSS/JavaScript puro
-- **Autenticación JWT**: Endpoints de API seguros con tokens JWT
-- **Base de Datos SQLite**: Base de datos ligera y portátil
-
-## Estructura del Proyecto
+**Stack implementado (Ejemplo 1 de las consignas):**
 
 ```
-TikTask/
-├── .github/
-│   └── workflows/
-│       └── ci-cd.yml           # Pipeline de GitHub Actions
-├── backend/                    # Backend API Node.js
-│   ├── src/
-│   │   ├── config/            # Configuración
-│   │   │   └── database.js    # Configuración de SQLite
-│   │   ├── middleware/        # Middleware de Express
-│   │   │   └── auth.js        # Middleware de autenticación
-│   │   ├── models/            # Modelos de datos
-│   │   │   ├── User.js        # Modelo de usuario
-│   │   │   └── Task.js        # Modelo de tarea
-│   │   ├── routes/            # Rutas de API
-│   │   │   ├── auth.js        # Rutas de autenticación
-│   │   │   ├── tasks.js       # Rutas de tareas
-│   │   │   └── users.js       # Rutas de usuarios
-│   │   └── seed.js            # Seeding de base de datos
-│   ├── tests/                 # Tests del backend
-│   ├── server.js              # Punto de entrada del servidor
-│   ├── package.json           # Dependencias de Node.js
-│   ├── Dockerfile             # Imagen Docker del backend
-│   └── .dockerignore          # Archivos ignorados en build
-├── frontend/                   # Frontend estático
-│   ├── index.html             # Aplicación de una sola página
-│   ├── styles.css             # Estilos
-│   ├── app.js                 # Lógica del cliente
-│   ├── Dockerfile             # Imagen Docker del frontend (nginx)
-│   ├── nginx.conf             # Configuración de nginx
-│   └── .dockerignore          # Archivos ignorados en build
-├── docker-compose.yml         # Orquestación de servicios
-├── render.yaml                # Configuración de Render (IaC)
-├── DOCKER_STRUCTURE.md        # Documentación de la estructura Docker
-└── TP8_IMPLEMENTATION.md      # Documentación del TP8
+GitHub Repository
+  ↓
+GitHub Actions (CI/CD)
+  ↓ Build + Test
+  ↓ Docker Build + Push
+  ↓
+GitHub Container Registry (ghcr.io)
+  ↓
+Deploy automático → Render.com QA (Free)
+  ↓ Approval Gate
+Deploy manual → Render.com PROD (Starter $7/mo)
 ```
 
-## Tecnologías Utilizadas
+**Costo total: $7/mes**
+
+### Componentes
+
+- ✅ **Container Registry**: GitHub Container Registry (gratis)
+- ✅ **CI/CD**: GitHub Actions (gratis)
+- ✅ **QA Environment**: Render.com Free tier (gratis)
+- ✅ **PROD Environment**: Render.com Starter ($7/mes)
+- ✅ **Pipeline completo**: Build → Test → Deploy QA → Approval → Deploy PROD
+
+---
+
+## 💻 Características de la Aplicación
+
+- ✅ Autenticación de usuarios (registro e inicio de sesión)
+- ✅ Gestión de tareas (crear, editar, eliminar, completar)
+- ✅ Fechas de vencimiento para tareas
+- ✅ Rol de administrador con vista de todas las tareas
+- ✅ Diseño responsivo
+- ✅ API RESTful segura con JWT
+- ✅ Base de datos SQLite
+
+## 🛠️ Tecnologías
 
 ### Backend
 - **Node.js**: Runtime de JavaScript
@@ -100,251 +118,73 @@ TikTask/
 - **HTML/CSS/JavaScript**: Frontend sin frameworks
 - **Nginx**: Servidor web para archivos estáticos
 
-### DevOps
-- **Docker**: Contenedorización (separada para frontend y backend)
+### DevOps & Cloud
+- **Docker**: Contenedorización
 - **GitHub Actions**: CI/CD
 - **GitHub Container Registry**: Almacenamiento de imágenes
 - **Render.com**: Hosting en la nube
-- **Render.com**: Hosting cloud
 
-## Requisitos Previos
+---
 
-- [Node.js 18+](https://nodejs.org/)
-- npm (viene con Node.js)
+## 🧪 Desarrollo Local (sin Docker)
 
-## Inicio Rápido
+### Requisitos
+- Node.js 18+
+- npm
 
-### 1. Clonar el Repositorio
-
-```bash
-git clone https://github.com/baujuncos/TP5_IS3.git
-cd TP5_IS3
-```
-
-### 2. Instalar Dependencias
+### Instalación y Ejecución
 
 ```bash
+# 1. Clonar el repositorio
+git clone https://github.com/baujuncos/TP08_CloudContainers_IS3.git
+cd TP08_CloudContainers_IS3
+
+# 2. Instalar dependencias del backend
+cd backend
 npm install
-```
 
-### 3. Configurar Variables de Entorno
-
-Copia el archivo `.env.example` a `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Edita `.env` si necesitas cambiar la configuración:
-```
-PORT=3000
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-NODE_ENV=development
-DATABASE_PATH=./database.sqlite
-```
-
-### 4. Iniciar el Servidor
-
-```bash
+# 3. Iniciar el servidor
 npm start
 ```
 
 El servidor se ejecutará en `http://localhost:3000`
 
-### 5. Acceder a la Aplicación
+### Credenciales por Defecto
 
-Abre tu navegador y navega a `http://localhost:3000`
+**Usuario Administrador:**
+- Usuario: `admin`
+- Contraseña: `Admin123!`
 
-## Credenciales por Defecto
+---
 
-### Usuario Administrador
-- **Usuario**: `admin`
-- **Contraseña**: `Admin123!`
+## 🧪 Testing
 
-### Crear Usuario Normal
-1. Haz clic en "Regístrate aquí" en la página de inicio de sesión
-2. Completa el formulario con tus datos
-3. Haz clic en "Registrarse"
-
-## Uso de la Aplicación
-
-### 1. Registro/Inicio de Sesión
-- Al abrir la aplicación, serás redirigido a la página de inicio de sesión
-- Puedes registrarte o iniciar sesión con el usuario admin
-
-### 2. Crear una Tarea
-1. Haz clic en el botón "+ Nueva Tarea"
-2. Completa el formulario:
-   - **Título**: Título de la tarea (requerido)
-   - **Descripción**: Descripción detallada (opcional)
-   - **Fecha de Vencimiento**: Fecha límite (opcional)
-3. Haz clic en "Guardar"
-
-### 3. Gestionar Tareas
-- **Completar**: Haz clic en "Completar" para marcar una tarea como completada
-- **Editar**: Haz clic en "Editar" para modificar una tarea
-- **Eliminar**: Haz clic en "Eliminar" para eliminar una tarea
-
-### 4. Funcionalidad de Administrador
-1. Inicia sesión como administrador
-2. Verás un botón "Ver Todas las Tareas"
-3. Haz clic para ver las tareas de todos los usuarios con sus nombres de usuario
-4. Haz clic en "Ver Mis Tareas" para volver a tus tareas
-
-## API Endpoints
-
-### Autenticación
-- `POST /api/auth/register` - Registrar un nuevo usuario
-- `POST /api/auth/login` - Iniciar sesión y obtener token JWT
-
-### Tareas
-- `GET /api/tasks` - Obtener las tareas del usuario actual
-- `GET /api/tasks/all` - Obtener todas las tareas (Solo Admin)
-- `POST /api/tasks` - Crear nueva tarea
-- `PUT /api/tasks/:id` - Actualizar tarea
-- `PATCH /api/tasks/:id/complete` - Alternar completado de tarea
-- `DELETE /api/tasks/:id` - Eliminar tarea
-
-## Cómo ejecutar tests localmente
-
-### Prerrequisitos
-- **Node.js** ≥ 18 LTS  
-- **npm** ≥ 9
-- SO probado: macOS / Linux / Windows
-- Variables de entorno:
-  - Crear un archivo **`.env`** (para ejecución normal) y, si se quiere aislar los tests, un **`.env.test`**. 
-  - Valores típicos:
-    ```
-    PORT=3000
-    JWT_SECRET=dev-secret
-    DB_PATH=./database.sqlite
-    ```
-    > En modo test, el runner re-crea las tablas y siembra el usuario admin (`admin / Admin123!`).
-
-### Instalación
 ```bash
-npm ci
-```
-
-### Ejecutar todos los tests
-```bash
+# Ejecutar todos los tests
+cd backend
 npm test
+
+# Tests con coverage
+npm run test:coverage
 ```
 
-## Despliegue en Azure App Services
+---
 
-### Configuración Automática con Azure DevOps
+## 📖 Más Información
 
-El proyecto incluye un archivo `azure-pipelines.yml` configurado para:
-1. Construcción automática del código
-2. Pruebas (cuando estén disponibles)
-3. Publicación de artefactos
-4. Despliegue automático a Azure App Services
+- **Guía completa del TP8**: [GUIA_TP8.md](./GUIA_TP8.md)
+- **Consignas originales**: [TP8_consignas.MD](./TP8_consignas.MD)
+- **Reportar issues**: [GitHub Issues](https://github.com/baujuncos/TP08_CloudContainers_IS3/issues)
 
-### Pasos de Configuración:
+---
 
-1. **Crear Azure App Service**:
-   - Crea un Azure App Service con runtime Node.js 18 LTS
-   - El archivo `web.config` está incluido para configuración de IIS
+## 👥 Autores
 
-2. **Configurar Variables de Pipeline en Azure DevOps**:
-   - `AzureSubscription`: Tu conexión de servicio de Azure
-   - `AppName`: Nombre del App Service
+**Belén Treachi y Bautista Juncos**  
+Ingeniería de Software 3 - TP8
 
-3. **Configurar Variables de Entorno en Azure**:
-   - En Azure Portal, ve a tu App Service
-   - Settings > Configuration > Application settings
-   - Agrega:
-     - `JWT_SECRET`: Una clave secreta fuerte
-     - `NODE_ENV`: `production`
-     - `DATABASE_PATH`: `/home/data/database.sqlite` (para persistencia)
+---
 
-4. **Crear Pipeline**:
-   - En Azure DevOps, crea un nuevo pipeline
-   - Selecciona el repositorio y usa el `azure-pipelines.yml` existente
-
-### Base de Datos en Azure
-
-SQLite funciona en Azure App Services. Para persistencia de datos:
-- Usa `/home/data/` como ruta de base de datos
-- Este directorio persiste entre reinicios
-- Configurado en `DATABASE_PATH=/home/data/database.sqlite`
-
-## Desarrollo
-
-### Ejecutar en Modo Desarrollo
-
-Para desarrollo con auto-reload, instala nodemon:
-
-```bash
-npm install -g nodemon
-npm run dev
-```
-
-### Estructura de la Base de Datos
-
-#### Tabla Users
-- `id`: INTEGER PRIMARY KEY
-- `username`: TEXT UNIQUE
-- `email`: TEXT UNIQUE
-- `password`: TEXT (hash BCrypt)
-- `role`: TEXT ('user' o 'admin')
-- `created_at`: DATETIME
-
-#### Tabla Tasks
-- `id`: INTEGER PRIMARY KEY
-- `title`: TEXT
-- `description`: TEXT
-- `due_date`: DATE
-- `completed`: BOOLEAN
-- `user_id`: INTEGER (FK a Users)
-- `created_at`: DATETIME
-- `updated_at`: DATETIME
-
-## Seguridad
-
-✅ Contraseñas hasheadas con BCrypt
-✅ Autenticación JWT con expiración
-✅ Autorización basada en roles
-✅ Validación de datos en backend
-✅ Protección contra acceso no autorizado
-✅ Helmet para headers de seguridad HTTP
-✅ Rate limiting en endpoints de API
-✅ CORS configurado
-
-**Notas Importantes para Producción**:
-- Cambia la clave secreta JWT a un valor fuerte y aleatorio
-- Usa HTTPS en producción
-- Almacena secretos en Azure Key Vault o variables de entorno
-- Considera agregar límites de tasa más estrictos
-
-## Solución de Problemas
-
-### El servidor no inicia
-- Verifica que el puerto 3000 esté disponible
-- Asegúrate de tener Node.js 18+ instalado
-- Ejecuta `npm install` para instalar dependencias
-
-### Error de base de datos
-- Elimina el archivo `database.sqlite` y reinicia el servidor
-- Verifica permisos de escritura en la carpeta
-- En Azure, asegúrate de usar `/home/data/` para la ruta de BD
-
-### La aplicación no carga en el navegador
-- Verifica que el servidor esté ejecutándose
-- Comprueba la consola del navegador para errores
-- Asegúrate de que el puerto coincida en tu configuración
-
-## Soporte
-
-Para reportar problemas o solicitar nuevas características:
-- Abre un issue en: https://github.com/baujuncos/TP5_IS3/issues
-
-## Licencia
+## 📄 Licencia
 
 Este proyecto está licenciado bajo la Licencia MIT.
-
-## Autor
-
-Desarrollado como parte del TP5 de Ingeniería de Software 3.
-
