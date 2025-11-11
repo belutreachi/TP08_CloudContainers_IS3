@@ -15,9 +15,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet({
-  contentSecurityPolicy: false // Allow inline scripts for our simple frontend
-}));
+app.use(helmet());
 app.use(cors());
 
 // Rate limiting
