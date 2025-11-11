@@ -16,6 +16,8 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
@@ -95,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-docker
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
     environment:
       name: qa
       url: ${{ steps.deploy.outputs.url }}
@@ -145,6 +149,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy-qa
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
