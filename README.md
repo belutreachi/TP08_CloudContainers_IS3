@@ -16,16 +16,27 @@ Este proyecto incluye una implementación completa de CI/CD con contenedores Doc
 
 ### Quick Start con Docker
 
-```bash
-# Opción 1: Docker Compose (recomendado para desarrollo)
-docker-compose up
+**Estructura Reorganizada**: El proyecto ahora está organizado en `backend/` y `frontend/` con Dockerfiles separados. Ver [DOCKER_STRUCTURE.md](./DOCKER_STRUCTURE.md) para más detalles.
 
-# Opción 2: Docker directo
-docker build -t tiktask .
-docker run -p 3000:3000 -v $(pwd)/data:/app/data tiktask
+```bash
+# Opción 1: Docker Compose (recomendado - inicia ambos servicios)
+docker-compose up --build
+
+# Opción 2: Construir y ejecutar contenedores individualmente
+# Backend
+cd backend
+docker build -t tiktask-backend .
+docker run -p 3000:3000 -e DATABASE_PATH=/app/data/database.sqlite tiktask-backend
+
+# Frontend (en otra terminal)
+cd frontend
+docker build -t tiktask-frontend .
+docker run -p 80:80 tiktask-frontend
 ```
 
-La aplicación estará disponible en `http://localhost:3000`
+La aplicación estará disponible en:
+- **Docker Compose**: `http://localhost` (puerto 80)
+- **Contenedores individuales**: Frontend en `http://localhost:80`, Backend en `http://localhost:3000`
 
 ## Características
 
@@ -43,41 +54,57 @@ La aplicación estará disponible en `http://localhost:3000`
 TikTask/
 ├── .github/
 │   └── workflows/
-│       └── ci-cd.yml        # Pipeline de GitHub Actions
-├── public/                  # Frontend (HTML/CSS/JavaScript)
-│   ├── index.html          # Aplicación de una sola página
-│   ├── styles.css          # Estilos
-│   └── app.js              # Lógica del cliente
-├── src/
-│   ├── config/             # Configuración
-│   │   └── database.js     # Configuración de SQLite
-│   ├── middleware/         # Middleware de Express
-│   │   └── auth.js         # Middleware de autenticación
-│   ├── models/             # Modelos de datos
-│   │   ├── User.js         # Modelo de usuario
-│   │   └── Task.js         # Modelo de tarea
-│   ├── routes/             # Rutas de API
-│   │   ├── auth.js         # Rutas de autenticación
-│   │   └── tasks.js        # Rutas de tareas
-│   └── seed.js             # Seeding de base de datos
-├── Dockerfile              # Imagen Docker de la aplicación
-├── docker-compose.yml      # Configuración Docker Compose
-├── render.yaml             # Configuración de Render (IaC)
-├── server.js               # Punto de entrada del servidor
-├── package.json            # Dependencias de Node.js
-└── TP8_IMPLEMENTATION.md   # Documentación del TP8
+│       └── ci-cd.yml           # Pipeline de GitHub Actions
+├── backend/                    # Backend API Node.js
+│   ├── src/
+│   │   ├── config/            # Configuración
+│   │   │   └── database.js    # Configuración de SQLite
+│   │   ├── middleware/        # Middleware de Express
+│   │   │   └── auth.js        # Middleware de autenticación
+│   │   ├── models/            # Modelos de datos
+│   │   │   ├── User.js        # Modelo de usuario
+│   │   │   └── Task.js        # Modelo de tarea
+│   │   ├── routes/            # Rutas de API
+│   │   │   ├── auth.js        # Rutas de autenticación
+│   │   │   ├── tasks.js       # Rutas de tareas
+│   │   │   └── users.js       # Rutas de usuarios
+│   │   └── seed.js            # Seeding de base de datos
+│   ├── tests/                 # Tests del backend
+│   ├── server.js              # Punto de entrada del servidor
+│   ├── package.json           # Dependencias de Node.js
+│   ├── Dockerfile             # Imagen Docker del backend
+│   └── .dockerignore          # Archivos ignorados en build
+├── frontend/                   # Frontend estático
+│   ├── index.html             # Aplicación de una sola página
+│   ├── styles.css             # Estilos
+│   ├── app.js                 # Lógica del cliente
+│   ├── Dockerfile             # Imagen Docker del frontend (nginx)
+│   ├── nginx.conf             # Configuración de nginx
+│   └── .dockerignore          # Archivos ignorados en build
+├── docker-compose.yml         # Orquestación de servicios
+├── render.yaml                # Configuración de Render (IaC)
+├── DOCKER_STRUCTURE.md        # Documentación de la estructura Docker
+└── TP8_IMPLEMENTATION.md      # Documentación del TP8
 ```
 
 ## Tecnologías Utilizadas
 
+### Backend
 - **Node.js**: Runtime de JavaScript
 - **Express**: Framework web
 - **SQLite**: Base de datos
 - **JWT (JSON Web Tokens)**: Autenticación
 - **BCrypt**: Hash de contraseñas
+
+### Frontend
 - **HTML/CSS/JavaScript**: Frontend sin frameworks
-- **Docker**: Contenedorización
+- **Nginx**: Servidor web para archivos estáticos
+
+### DevOps
+- **Docker**: Contenedorización (separada para frontend y backend)
 - **GitHub Actions**: CI/CD
+- **GitHub Container Registry**: Almacenamiento de imágenes
+- **Render.com**: Hosting en la nube
 - **Render.com**: Hosting cloud
 
 ## Requisitos Previos
