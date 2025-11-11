@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Testing
+coverage/
+test-results/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.test
+
+# Database
+*.sqlite
+*.db
+
+# Uploads
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/

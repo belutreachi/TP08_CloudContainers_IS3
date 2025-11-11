@@ -1,0 +1,369 @@
+# Azure DevOps Pipeline Integrado para TikTask
+# Orden: Test → SonarPrepare → Build → SonarAnalyze → Artifacts
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # Build Configuration
+  buildConfiguration: 'Release'
+  NODE_VERSION: '18.18.x'
+  
+  # Testing Configuration
+  NODE_ENV: 'test'
+  DATABASE_PATH: ':memory:'
+  JWT_SECRET: 'test-secret-key-ci-pipeline'
+  PORT: '3001'
+  
+  # Azure Configuration
+  azureSubscription: 'azure-tp05-connection'
+
+stages:
+  # STAGE 1: BUILD, TEST AND ANALYZE
+  - stage: Build_Test_Analyze
+    displayName: 'Build, Test and Analyze'
+    jobs:
+      - job: CompletePipeline
+        displayName: 'Complete CI Pipeline'
+        steps:
+          # 1. CHECKOUT
+          - checkout: self
+            fetchDepth: 0
+            displayName: 'Checkout repository'
+          
+          # 2. NODE.JS SETUP
+          - task: NodeTool@0
+            displayName: 'Install Node.js $(NODE_VERSION)'
+            inputs:
+              versionSpec: $(NODE_VERSION)
+
+          # 3. CLEAN CACHE
+          - script: |
+              npm cache clean --force
+            displayName: 'Clean npm cache'
+            continueOnError: true
+
+          # 4. INSTALL DEPENDENCIES
+          - script: |
+              npm ci
+            displayName: 'Install dependencies (npm ci)'
+
+          # 5. VERIFY ENVIRONMENT
+          - script: |
+              echo "=== Environment Information ==="
+              node --version
+              npm --version
+              echo ""
+              echo "=== Installed Test Packages ==="
+              npm list jest jest-junit || true
+            displayName: 'Verify environment'
+
+          # 6. CREATE OUTPUT DIRECTORIES
+          - script: |
+              mkdir -p test-results coverage
+            displayName: 'Create output directories'
+
+          # 7. RUN TESTS WITH COVERAGE (PRIMERO)
+          - script: |
+              npm run test:ci
+            displayName: 'Run tests with coverage'
+            env:
+              NODE_ENV: test
+              CI: true
+              DATABASE_PATH: ':memory:'
+              JWT_SECRET: 'test-secret-key-ci-pipeline'
+              PORT: 3001
+
+          # 8. VERIFY TEST RESULTS
+          - script: |
+              echo "=== Test Results Verification ==="
+              echo ""
+              echo "📁 Test Results Directory:"
+              ls -lah test-results/ || echo "❌ test-results not found"
+              
+              if [ -f test-results/junit.xml ]; then
+                echo "✅ junit.xml found ($(wc -l < test-results/junit.xml) lines)"
+              else
+                echo "❌ junit.xml NOT found"
+              fi
+              
+              echo ""
+              echo "📁 Coverage Directory:"
+              ls -lah coverage/ || echo "❌ coverage not found"
+              
+              if [ -f coverage/cobertura-coverage.xml ]; then
+                echo "✅ cobertura-coverage.xml found"
+              else
+                echo "❌ cobertura-coverage.xml NOT found"
+              fi
+              
+              if [ -f coverage/lcov.info ]; then
+                echo "✅ lcov.info found (for SonarCloud)"
+              else
+                echo "❌ lcov.info NOT found"
+              fi
+            displayName: 'Verify test files generated'
+            condition: always()
+
+          # 8-bis. INSTALL CYPRESS DEPENDENCIES (solo si no están incluidas)
+          - script: |
+              echo "=== Installing Cypress and dependencies ==="
+              npm install --save-dev cypress wait-on
+              npx cypress verify
+              npx cypress version
+              npm list @faker-js/faker
+            displayName: 'Install Cypress (E2E dependencies)'
+            condition: succeeded()
+
+          # 8-ter. START APP FOR E2E TESTS
+          - script: |
+              echo "=== Starting application for Cypress E2E ==="
+              npm start &
+              npx wait-on http://localhost:$PORT
+            displayName: 'Start app and wait until ready'
+            condition: succeeded()
+
+          # 8-quater. RUN CYPRESS TESTS
+          - script: |
+              echo "=== Running Cypress E2E Tests ==="
+              npx cypress run --browser chrome --headless --reporter junit \
+                --reporter-options "mochaFile=cypress/results/junit-[hash].xml,toConsole=true"
+            displayName: 'Run Cypress E2E Tests'
+            env:
+              NODE_ENV: test
+              CI: true
+            condition: succeeded()
+
+          # 8-quinquies. PUBLISH CYPRESS TEST RESULTS
+          - task: PublishTestResults@2
+            displayName: 'Publish Cypress E2E Test Results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'cypress/results/*.xml'
+              searchFolder: '$(System.DefaultWorkingDirectory)'
+              mergeTestResults: true
+              failTaskOnFailedTests: true     # si ponemos en false evita que marque error por falsos negativos
+              testRunTitle: 'Cypress E2E Tests - $(Build.BuildNumber)'
+              publishRunAttachments: true
+
+          # 9. PUBLISH TEST RESULTS (DESPUÉS DE TESTS)
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/junit.xml'
+              searchFolder: '$(System.DefaultWorkingDirectory)'
+              mergeTestResults: true
+              failTaskOnFailedTests: true
+              testRunTitle: 'TikTask Tests - $(Build.BuildNumber)'
+              publishRunAttachments: true
+
+          # 10. PUBLISH CODE COVERAGE (DESPUÉS DE TESTS)
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish Code Coverage'
+            condition: succeededOrFailed()
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
+              reportDirectory: '$(System.DefaultWorkingDirectory)/coverage'
+              failIfCoverageEmpty: false
+
+          # EXTRA: VALIDAR MINIMO DE COBERTURA (70%)
+          - script: |
+              echo "🔍 Checking code coverage threshold..."
+              
+              REPORT_FILE="coverage/cobertura-coverage.xml"
+
+              if [ ! -f "$REPORT_FILE" ]; then
+                echo "❌ Coverage report not found at $REPORT_FILE"
+                exit 1
+              fi
+
+              echo "📄 Found report file: $REPORT_FILE"
+              echo "Extracting line coverage percentage..."
+
+              # Extraer cobertura desde el resumen del XML (funciona con Jest)
+              COVERAGE=$(grep -oP '(?<=<line-rate>)[0-9.]+(?=</line-rate>)' "$REPORT_FILE" | head -1)
+
+              # Si no encuentra, intenta con el atributo XML (plan B)
+              if [ -z "$COVERAGE" ]; then
+                COVERAGE=$(grep -oP '(?<=line-rate=")[0-9.]+(?=")' "$REPORT_FILE" | head -1)
+              fi
+
+              if [ -z "$COVERAGE" ]; then
+                echo "❌ Could not extract coverage value from XML"
+                echo "🔍 Try opening $REPORT_FILE to confirm its structure."
+                exit 1
+              fi
+
+              COVERAGE_PERCENT=$(awk "BEGIN {print $COVERAGE * 100}")
+              echo "📊 Detected coverage: ${COVERAGE_PERCENT}%"
+
+              if (( $(echo "$COVERAGE_PERCENT < 70" | bc -l) )); then
+                echo "❌ Code coverage below 70%. Blocking deploy."
+                exit 1
+              else
+                echo "✅ Coverage OK (${COVERAGE_PERCENT}%)"
+              fi
+            displayName: 'VALIDAR COBERTURA ≥ 70%'
+            condition: succeeded()
+
+          # 11. SONARCLOUD PREPARE (DESPUÉS DE TESTS)
+          - task: SonarCloudPrepare@3
+            displayName: 'Prepare SonarCloud Analysis'
+            inputs:
+              SonarCloud: 'TP7_CodeCoverage_IS3'
+              organization: 'baujuncos'
+              scannerMode: 'cli'
+              configMode: 'manual'
+              cliProjectKey: 'baujuncos_TP7_CodeCoverage_IS3'
+              cliProjectName: 'TP7_CodeCoverage_IS3'
+              cliSources: '.'
+              extraProperties: |
+                # --- Reportes de coverage ---
+                sonar.javascript.lcov.reportPaths=$(System.DefaultWorkingDirectory)/coverage/lcov.info
+
+                # --- Exclusions ---
+                sonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/test/**,**/tests/**,**/cypress/**
+                sonar.exclusions=**/node_modules/**,**/coverage/**,**/cypress/**,**/*.test.js
+
+                # --- Encoding y logs ---
+                sonar.sourceEncoding=UTF-8
+                sonar.verbose=true
+
+          # 12. BUILD APPLICATION (DESPUÉS DE SONAR PREPARE)
+          - script: |
+              echo "=== Building Application ==="
+              npm run build
+              echo "Build completed"
+            displayName: 'Build Application'
+
+          # 13. SONARCLOUD ANALYSIS (DESPUÉS DE BUILD)
+          - task: SonarCloudAnalyze@3
+            displayName: 'Run SonarCloud Code Analysis'
+            inputs:
+              jdkversion: 'JAVA_HOME_17_X64'
+
+          # 14. SONARCLOUD PUBLISH (DESPUÉS DE ANALYZE)
+          - task: SonarCloudPublish@3
+            displayName: 'Publish SonarCloud Results'
+            inputs:
+              pollingTimeoutSec: '300'
+
+          # 14-bis. CHECK SONARCLOUD QUALITY GATE (SonarCloud API)
+          - script: |
+              echo "🔍 Checking SonarCloud Quality Gate status..."
+              PROJECT_KEY="baujuncos_TP7_CodeCoverage_IS3"
+              SONAR_TOKEN=$(SONAR_TOKEN)
+              ANALYSIS_STATUS=$(curl -s -u "$SONAR_TOKEN:" \
+                "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" \
+                | jq -r '.projectStatus.status')
+
+              echo "SonarCloud Quality Gate Status: $ANALYSIS_STATUS"
+
+              if [ "$ANALYSIS_STATUS" != "OK" ]; then
+                echo "❌ Quality Gate failed. Blocking deployment."
+                exit 1
+              else
+                echo "✅ Quality Gate passed."
+              fi
+            displayName: 'Check SonarCloud Quality Gate via API'
+            env:
+              SONAR_TOKEN: $(SONAR_TOKEN)
+            condition: succeeded()
+
+          # 15. ARCHIVE APPLICATION FILES
+          - task: ArchiveFiles@2
+            displayName: 'Archive Application Files'
+            condition: succeeded()
+            inputs:
+              rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+              replaceExistingArchive: true
+              verbose: true
+
+          # 16. PUBLISH BUILD ARTIFACTS
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Application Artifact'
+            condition: succeeded()
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'drop'
+              publishLocation: 'Container'
+
+          # 17. PUBLISH TEST REPORTS ARTIFACT
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Test Reports Artifact'
+            condition: succeededOrFailed()
+            inputs:
+              PathtoPublish: '$(System.DefaultWorkingDirectory)/test-results'
+              ArtifactName: 'test-reports'
+              publishLocation: 'Container'
+
+          # 18. PUBLISH COVERAGE REPORTS ARTIFACT
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Coverage Reports Artifact'
+            condition: succeededOrFailed()
+            inputs:
+              PathtoPublish: '$(System.DefaultWorkingDirectory)/coverage'
+              ArtifactName: 'coverage-reports'
+              publishLocation: 'Container'
+
+  - stage: DeployQA
+    displayName: 'Deploy to QA'
+    dependsOn: Build_Test_Analyze
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployToAzureQA
+        displayName: 'Deploy to QA'
+        environment: 'QA-tp7'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadBuildArtifacts@1
+                  displayName: 'Download Artifacts'
+                  inputs:
+                    buildType: 'current'
+                    downloadType: 'single'
+                    artifactName: 'drop'
+                    downloadPath: '$(System.ArtifactsDirectory)'
+
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to QA'
+                  inputs:
+                    azureSubscription: '$(AzureSubscription)'
+                    appType: 'webApp'
+                    appName: 'webapp-tp05-qa-juncos-treachi'
+                    package: '$(System.ArtifactsDirectory)/drop/$(Build.BuildId).zip'
+                    runtimeStack: 'NODE|18-lts'
+                    startUpCommand: 'npm start'
+
+                - script: |
+                    echo "Waiting for health endpoint to respond..."
+                    url="https://webapp-tp05-qa-juncos-treachi-fqa5gug9addretfg.canadacentral-01.azurewebsites.net/api/health"
+                    timeout=120    # segundos totales
+                    interval=5     # intervalo entre intentos
+                    elapsed=0
+                    until curl -sSf "$url" > /dev/null; do
+                      sleep $interval
+                      elapsed=$((elapsed + interval))
+                      echo "Waiting... ${elapsed}s elapsed"
+                      if [ $elapsed -ge $timeout ]; then
+                        echo "Health check timed out after ${timeout}s"
+                        exit 1
+                      fi
+                    done
+                    echo "Health endpoint is OK: $url"
+                  displayName: 'Wait for /api/health (QA)'
+                  condition: succeeded()
