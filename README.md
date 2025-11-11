@@ -3,6 +3,30 @@
 
 TikTask es una aplicación web moderna de gestión de tareas construida con Node.js, Express y SQLite.
 
+## 🚀 TP8 - Implementación de Contenedores en la Nube
+
+Este proyecto incluye una implementación completa de CI/CD con contenedores Docker:
+
+- **Container Registry**: GitHub Container Registry (ghcr.io)
+- **CI/CD**: GitHub Actions con pipeline automatizado
+- **QA Environment**: Render.com (Free tier) - Deploy automático
+- **Production Environment**: Render.com (Starter tier) - Deploy con aprobación manual
+
+📖 **Documentación completa**: Ver [TP8_IMPLEMENTATION.md](./TP8_IMPLEMENTATION.md)
+
+### Quick Start con Docker
+
+```bash
+# Opción 1: Docker Compose (recomendado para desarrollo)
+docker-compose up
+
+# Opción 2: Docker directo
+docker build -t tiktask .
+docker run -p 3000:3000 -v $(pwd)/data:/app/data tiktask
+```
+
+La aplicación estará disponible en `http://localhost:3000`
+
 ## Características
 
 - **Autenticación de Usuarios**: Registro e inicio de sesión con hash seguro de contraseñas (BCrypt)
@@ -17,26 +41,31 @@ TikTask es una aplicación web moderna de gestión de tareas construida con Node
 
 ```
 TikTask/
-├── public/                 # Frontend (HTML/CSS/JavaScript)
-│   ├── index.html         # Aplicación de una sola página
-│   ├── styles.css         # Estilos
-│   └── app.js             # Lógica del cliente
+├── .github/
+│   └── workflows/
+│       └── ci-cd.yml        # Pipeline de GitHub Actions
+├── public/                  # Frontend (HTML/CSS/JavaScript)
+│   ├── index.html          # Aplicación de una sola página
+│   ├── styles.css          # Estilos
+│   └── app.js              # Lógica del cliente
 ├── src/
-│   ├── config/            # Configuración
-│   │   └── database.js    # Configuración de SQLite
-│   ├── middleware/        # Middleware de Express
-│   │   └── auth.js        # Middleware de autenticación
-│   ├── models/            # Modelos de datos
-│   │   ├── User.js        # Modelo de usuario
-│   │   └── Task.js        # Modelo de tarea
-│   ├── routes/            # Rutas de API
-│   │   ├── auth.js        # Rutas de autenticación
-│   │   └── tasks.js       # Rutas de tareas
-│   └── seed.js            # Seeding de base de datos
-├── server.js              # Punto de entrada del servidor
-├── package.json           # Dependencias de Node.js
-├── web.config             # Configuración para Azure App Services
-└── azure-pipelines.yml    # Pipeline de Azure DevOps
+│   ├── config/             # Configuración
+│   │   └── database.js     # Configuración de SQLite
+│   ├── middleware/         # Middleware de Express
+│   │   └── auth.js         # Middleware de autenticación
+│   ├── models/             # Modelos de datos
+│   │   ├── User.js         # Modelo de usuario
+│   │   └── Task.js         # Modelo de tarea
+│   ├── routes/             # Rutas de API
+│   │   ├── auth.js         # Rutas de autenticación
+│   │   └── tasks.js        # Rutas de tareas
+│   └── seed.js             # Seeding de base de datos
+├── Dockerfile              # Imagen Docker de la aplicación
+├── docker-compose.yml      # Configuración Docker Compose
+├── render.yaml             # Configuración de Render (IaC)
+├── server.js               # Punto de entrada del servidor
+├── package.json            # Dependencias de Node.js
+└── TP8_IMPLEMENTATION.md   # Documentación del TP8
 ```
 
 ## Tecnologías Utilizadas
@@ -47,6 +76,9 @@ TikTask/
 - **JWT (JSON Web Tokens)**: Autenticación
 - **BCrypt**: Hash de contraseñas
 - **HTML/CSS/JavaScript**: Frontend sin frameworks
+- **Docker**: Contenedorización
+- **GitHub Actions**: CI/CD
+- **Render.com**: Hosting cloud
 
 ## Requisitos Previos
 
