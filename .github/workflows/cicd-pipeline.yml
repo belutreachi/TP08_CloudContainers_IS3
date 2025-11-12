@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     environment:
-      name: Production
+      name: PROD
       url: ${{ vars.PROD_FRONTEND_URL }}
     
     steps:

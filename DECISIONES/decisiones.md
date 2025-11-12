@@ -232,6 +232,23 @@ Para esta parte decidimos seguir trabajando con **Render.com** por los siguiente
 - **Monitoreo unificado**: dashboard único para ambos ambientes.
 
 ### 4.1. Deploy del Backend
+
+**Imágenes Docker:**
+- Ambos ambientes usan: `ghcr.io/belutreachi/tiktask-api:latest`
+- Estrategia: "Build once, deploy anywhere" - misma imagen, diferente configuración
+
+| Configuración | QA (`tiktask-api-qa`) | PROD (`tiktask-api-prod`) | Justificación |
+|--------------|----------------------|---------------------------|---------------|
+| **Environment** | `qa` | `production` | Segregación lógica en Render |
+| **NODE_ENV** | `development` | `production` | Node.js activa optimizaciones en prod (minificación, caching) |
+| **PORT** | `10000` | `10000` | Puerto estándar de Render (requerido) |
+| **DATABASE_PATH** | `/app/data/database.sqlite` | `/app/data/database.sqlite` | Mismo path, discos físicamente separados por servicio |
+| **LOG_LEVEL** | `debug` | `error` | QA: logs verbosos para debugging. PROD: solo errores críticos |
+| **Health Check Path** | `/api/health` | `/api/health` | Endpoint de health check |
+| **Health Check Interval** | 30 segundos | 10 segundos | PROD requiere detección más rápida de fallos |
+| **Persistent Disk** | `/app/data` - 1GB | `/app/data` - 1GB | Almacenamiento para SQLite, aislado por servicio |
+| **Auto-Deploy** | ✅ Activado | ❌ Desactivado | QA: CI continuo. PROD: deploys controlados manualmente |
+
 Primero creo un nuevo environment en el Dashboard de mi proyecto llamado **PROD**:
 ![alt text](image-33.png)
 Voy a **Create new service** → **Web Services** → **New Web Service**. Elijo **Existing Image** y copio la URL de mi imagen del backend:
