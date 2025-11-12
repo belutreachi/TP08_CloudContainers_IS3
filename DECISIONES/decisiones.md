@@ -200,7 +200,7 @@ docker buildx build \
 docker push ghcr.io/belutreachi/tiktask-web:latest
 ```
 
-2. Creo el Web Service para el Frontend:
+2. Crear el Web Service para el Frontend:
 
 Completo con la **URL de la imagen** y hago click en Connect:
 ![alt text](image-20.png)
@@ -249,3 +249,57 @@ Hago click en **Deploy Web Service** y noto que corre exitosamente. A la URL del
 Nuevamente no pudimos configurar recursos como CPU y memoria debido a limitaciones del plan gratuito de Render.
 
 ### 4.2. Deploy del Frontend
+1. Modificar el archivo `nginx.conf`.
+
+Debo cambiar:
+```bash
+proxy_pass https://tiktask-api-qa.onrender.com;
+```
+
+Por:
+```bash
+proxy_pass ${API_URL};
+```
+
+Y borrar esta línea:
+```bash
+proxy_set_header Host tiktask-api-qa.onrender.com;
+```
+
+Este cambio es necesario para que cuando despleguemos en PROD, no se rompa el despliegie en QA.
+
+Hago rebuild y push de la imagen del frontend:
+```bash
+docker buildx build \
+  --platform linux/amd64 \
+  -f frontend/Dockerfile \
+  -t ghcr.io/belutreachi/tiktask-web:latest \
+  --load \
+  ./frontend
+
+docker push ghcr.io/belutreachi/tiktask-web:latest
+```
+
+2. Crear el Web Service para el Frontend
+Voy a mi **Environment PROD** y hago click en **New Service** → **Web Service**:
+![alt text](image-40.png)
+Elijo **Existing Image** y pego la URL de mi imagen del frontend:
+![alt text](image-41.png)
+Hago click en **Connect** y completo la **configuración básica**:
+![alt text](image-42.png)
+![alt text](image-43.png)
+Configuro las siguientes **variables de entorno**:
+
+Hago click en **Deploy Web Service** y noto que corre exitosamente.:
+![alt text](image-44.png)
+![alt text](image-45.png)
+![alt text](image-46.png)
+Pruebo algunas funcionalidades y todo funciona bien:
+![alt text](image-47.png)
+![alt text](image-48.png)
+
+### 4.3. Implementar continuous deployment desde mi registry
+En mi Web Service `tiktask-web-prod` voy a **Settings** → **Deploy** y copio el Deploy Hook. Hago lo mismo para el Web Service `tiktask-api-prod`. Con estos hooks vamos a automatizar los despliegues dentro del pipeline que creamos en el siguiente paso.
+
+## 5. Pipeline CI/CD Completo
+
