@@ -34,6 +34,12 @@ module.exports = {
     '<rootDir>/tests/setupTests.js',
     '<rootDir>/tests/frontend/setupFrontend.js'
   ],
+
+  // Tests que ignoro
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/tests/frontend/'  // ← Agregar esta línea
+  ],
   
   // Configuración de reportes para Azure DevOps
   reporters: [

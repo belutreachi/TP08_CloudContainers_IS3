@@ -359,3 +359,5 @@ PROD_FRONTEND_URL = https://tiktask-web-prod.onrender.com
 ![alt text](image-55.png)
 **PROD**:
 ![alt text](image-56.png)
+
+Luego pusheo todo, espero a que corran los jobs y corroboro que el pipeline haya corrido con éxito:
