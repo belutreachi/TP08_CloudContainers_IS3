@@ -240,6 +240,7 @@ Hago click en **Connect** y completo la **configuración básica**:
 ![alt text](image-35.png)
 ![alt text](image-36.png)
 Configuro **Environment variables** distintas a las de **QA**:
+![alt text](image-51.png)
 Por último completo las **configuraciones avanzadas** de la siguiente manera:
 ![alt text](image-37.png)
 Hago click en **Deploy Web Service** y noto que corre exitosamente. A la URL del servicio (`https://tiktask-api-prod.onrender.com`) le agrego `/api/health` al final para ver que el backend responde:
@@ -247,6 +248,9 @@ Hago click en **Deploy Web Service** y noto que corre exitosamente. A la URL del
 ![alt text](image-39.png)
 
 Nuevamente no pudimos configurar recursos como CPU y memoria debido a limitaciones del plan gratuito de Render.
+
+**¿Por qué esta configuración para PROD?**
+
 
 ### 4.2. Deploy del Frontend
 1. Modificar el archivo `nginx.conf`.
@@ -289,6 +293,7 @@ Hago click en **Connect** y completo la **configuración básica**:
 ![alt text](image-42.png)
 ![alt text](image-43.png)
 Configuro las siguientes **variables de entorno**:
+![alt text](image-50.png)
 
 Hago click en **Deploy Web Service** y noto que corre exitosamente.:
 ![alt text](image-44.png)
@@ -301,5 +306,56 @@ Pruebo algunas funcionalidades y todo funciona bien:
 ### 4.3. Implementar continuous deployment desde mi registry
 En mi Web Service `tiktask-web-prod` voy a **Settings** → **Deploy** y copio el Deploy Hook. Hago lo mismo para el Web Service `tiktask-api-prod`. Con estos hooks vamos a automatizar los despliegues dentro del pipeline que creamos en el siguiente paso.
 
-## 5. Pipeline CI/CD Completo
+### 4.4. Diferencias de configuración entre QA y PROD
 
+
+## 5. Pipeline CI/CD Completo
+Para este paso decidimos usar **GitHub Actions**.
+
+**Justificación**:
+
+
+### 5.1. Crear archivo del pipeline
+Primero creo una carpeta llamada `.github/workflows` y adentro creo el archivo `cicd-pipeline.yml`.
+
+### 5.2. Configurar Environments en GitHub
+En mi repo de GitHub voy a **Settings** → **Environments** → click en **New environment**.
+
+Para **QA** completo con:
+- Name: **QA**
+- **NO** agrego **required viewers** (deploy automático)
+Hago click en **Save protection rules**.
+
+Para **PROD** completo con:
+- Name: **PROD**
+- Agrego **required viewers** para la aprobación manual. Agrego mi usuario.
+Hago click en **Save protection rules**.
+
+Los dos ambientes creados exitosamente:
+![alt text](image-52.png)
+
+### 5.3. Configurar Secrets en GitHub
+En mi repo voy a **Settings** → **Environments** → ***Environment correspondiente*** → **Environment secrets** → **Add environment secret** y creo los siguientes secretos completando sus valores con los Deploy Hooks correspondientes:
+```bash
+RENDER_BACKEND_QA_DEPLOY_HOOK
+RENDER_FRONTEND_QA_DEPLOY_HOOK
+RENDER_BACKEND_PROD_DEPLOY_HOOK
+RENDER_FRONTEND_PROD_DEPLOY_HOOK
+```
+**QA**:
+![alt text](image-53.png)
+**PROD**:
+![alt text](image-54.png)
+
+### 5.4. Configurar Variables en GitHub
+En mi repo voy a **Settings** → **Environments** → ***Environment correspondiente*** → **Environment variables** → **Add environment variable** y creo las siguientes variables con sus valores correspondientes:
+```bash
+QA_BACKEND_URL = https://tiktask-api-qa.onrender.com
+QA_FRONTEND_URL = https://tiktask-web-qa.onrender.com
+PROD_BACKEND_URL = https://tiktask-api-prod.onrender.com
+PROD_FRONTEND_URL = https://tiktask-web-prod.onrender.com
+```
+**QA**:
+![alt text](image-55.png)
+**PROD**:
+![alt text](image-56.png)

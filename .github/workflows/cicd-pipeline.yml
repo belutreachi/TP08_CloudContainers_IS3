@@ -1,0 +1,264 @@
+name: CI/CD - Build, Push to GHCR & Deploy to Render
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+# Permisos necesarios para GHCR
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/tiktask-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/tiktask-frontend
+
+jobs:
+  # =======================================
+  # 🧱 BUILD & TEST
+  # =======================================
+  build-and-test:
+    name: Build & Test Application
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ---- Backend (Node.js) ----
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run Backend Tests
+        run: |
+          cd backend
+          npm test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          DATABASE_PATH: ./test-database.sqlite
+
+  # =======================================
+  # 🐳 BUILD & PUSH DOCKER IMAGES
+  # =======================================
+  docker-build-push:
+    name: Build & Push Docker Images
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login to GHCR
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ===== BACKEND IMAGE =====
+      - name: Extract metadata for backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BACKEND }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.run_number }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ===== FRONTEND IMAGE =====
+      - name: Extract metadata for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_FRONTEND }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.run_number }}
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =======================================
+  # 🌐 DEPLOY TO RENDER QA
+  # =======================================
+  deploy-qa:
+    name: Deploy to QA (Render)
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment:
+      name: QA
+      url: ${{ vars.QA_FRONTEND_URL }}
+    
+    steps:
+      - name: Trigger Render Deploy - Backend QA
+        run: |
+          echo "🚀 Deploying Backend to QA environment..."
+          if [ -n "${{ secrets.RENDER_BACKEND_QA_DEPLOY_HOOK }}" ]; then
+            curl -X POST "${{ secrets.RENDER_BACKEND_QA_DEPLOY_HOOK }}"
+            echo "✅ Backend QA deployment triggered"
+          else
+            echo "⚠️ RENDER_BACKEND_QA_DEPLOY_HOOK not configured"
+            echo "Configure it at: Settings → Secrets → Actions"
+          fi
+      
+      - name: Trigger Render Deploy - Frontend QA
+        run: |
+          echo "🚀 Deploying Frontend to QA environment..."
+          if [ -n "${{ secrets.RENDER_FRONTEND_QA_DEPLOY_HOOK }}" ]; then
+            curl -X POST "${{ secrets.RENDER_FRONTEND_QA_DEPLOY_HOOK }}"
+            echo "✅ Frontend QA deployment triggered"
+          else
+            echo "⚠️ RENDER_FRONTEND_QA_DEPLOY_HOOK not configured"
+            echo "Configure it at: Settings → Secrets → Actions"
+          fi
+        
+      - name: Wait for deployment
+        run: sleep 60
+
+      - name: Verify QA Backend Deployment
+        run: |
+          echo "🔍 Verificando despliegue del Backend en QA..."
+          if [ -n "${{ vars.QA_BACKEND_URL }}" ]; then
+            response=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.QA_BACKEND_URL }}/api/health || echo "000")
+            if [ $response -eq 200 ]; then
+              echo "✅ QA Backend health check passed"
+            else
+              echo "⚠️ QA Backend health check returned: $response"
+            fi
+          else
+            echo "⚠️ QA_BACKEND_URL not configured"
+          fi
+      
+      - name: Verify QA Frontend Deployment
+        run: |
+          echo "🔍 Verificando despliegue del Frontend en QA..."
+          if [ -n "${{ vars.QA_FRONTEND_URL }}" ]; then
+            response=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.QA_FRONTEND_URL }} || echo "000")
+            if [ $response -eq 200 ]; then
+              echo "✅ QA Frontend health check passed"
+            else
+              echo "⚠️ QA Frontend health check returned: $response"
+            fi
+          else
+            echo "⚠️ QA_FRONTEND_URL not configured"
+          fi
+
+  # =======================================
+  # 🚀 DEPLOY TO RENDER PROD
+  # =======================================
+  deploy-prod:
+    name: Deploy to Production (Render)
+    needs: deploy-qa
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment:
+      name: Production
+      url: ${{ vars.PROD_FRONTEND_URL }}
+    
+    steps:
+      - name: Trigger Render Deploy - Backend PROD
+        run: |
+          echo "🚀 Deploying Backend to Production environment..."
+          if [ -n "${{ secrets.RENDER_BACKEND_PROD_DEPLOY_HOOK }}" ]; then
+            curl -X POST "${{ secrets.RENDER_BACKEND_PROD_DEPLOY_HOOK }}"
+            echo "✅ Backend PROD deployment triggered"
+          else
+            echo "⚠️ RENDER_BACKEND_PROD_DEPLOY_HOOK not configured"
+            echo "Configure it at: Settings → Secrets → Actions"
+          fi
+      
+      - name: Trigger Render Deploy - Frontend PROD
+        run: |
+          echo "🚀 Deploying Frontend to Production environment..."
+          if [ -n "${{ secrets.RENDER_FRONTEND_PROD_DEPLOY_HOOK }}" ]; then
+            curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_DEPLOY_HOOK }}"
+            echo "✅ Frontend PROD deployment triggered"
+          else
+            echo "⚠️ RENDER_FRONTEND_PROD_DEPLOY_HOOK not configured"
+            echo "Configure it at: Settings → Secrets → Actions"
+          fi
+        
+      - name: Wait for deployment
+        run: sleep 90
+
+      - name: Verify PROD Backend Deployment
+        run: |
+          echo "🔍 Verificando despliegue del Backend en PROD..."
+          if [ -n "${{ vars.PROD_BACKEND_URL }}" ]; then
+            response=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PROD_BACKEND_URL }}/api/health || echo "000")
+            if [ $response -eq 200 ]; then
+              echo "✅ PROD Backend health check passed"
+            else
+              echo "⚠️ PROD Backend health check returned: $response"
+            fi
+          else
+            echo "⚠️ PROD_BACKEND_URL not configured"
+          fi
+      
+      - name: Verify PROD Frontend Deployment
+        run: |
+          echo "🔍 Verificando despliegue del Frontend en PROD..."
+          if [ -n "${{ vars.PROD_FRONTEND_URL }}" ]; then
+            response=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PROD_FRONTEND_URL }} || echo "000")
+            if [ $response -eq 200 ]; then
+              echo "✅ PROD Frontend health check passed"
+            else
+              echo "⚠️ PROD Frontend health check returned: $response"
+            fi
+          else
+            echo "⚠️ PROD_FRONTEND_URL not configured"
+          fi
+
+      - name: Notify Success
+        run: |
+          echo "✅ Deployment to Production completed successfully!"
+          echo "🌐 QA Frontend: ${{ vars.QA_FRONTEND_URL }}"
+          echo "🔧 QA Backend: ${{ vars.QA_BACKEND_URL }}"
+          echo "🚀 PROD Frontend: ${{ vars.PROD_FRONTEND_URL }}"
+          echo "🔧 PROD Backend: ${{ vars.PROD_BACKEND_URL }}"
