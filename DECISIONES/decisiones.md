@@ -163,11 +163,26 @@ Luego completo los campos de **configuración básica** con lo siguiente:
 ![alt text](image-14.png)
 ![alt text](image-15.png)
 Después agrego **Environment variables**:
-![alt text](image-32.png)
+![alt text](image-62.png)
 Por último completo las **configuraciones avanzadas** con el path para **health checks**:
 ![alt text](image-17.png)
 
 No pudimos configurar recursos como CPU y memoria ya que esas configuraciones no están disponibles para el plan gratuito de Render.
+
+**¿Por qué esta configuración para QA?**
+
+| Parámetro | Valor | Justificación |
+|-----------|-------|---------------|
+| **Servicio** | Render Web Service (Free) | Gratuito, suficiente para testing funcional |
+| **Imagen Docker** | `ghcr.io/belutreachi/tiktask-api:latest` | Última versión stable del backend |
+| **NODE_ENV** | `development` | Permite logs verbosos y stack traces completos para debugging |
+| **DATABASE_PATH** | `/app/data/database.sqlite` | Path con permisos correctos (usuario `node`) |
+| **JWT_SECRET** | `render-qa-secret-key-2024-change-in-prod` | Secret único para QA, diferente de PROD |
+| **Disco persistente** | ❌ No disponible (limitación plan Free) | Datos se resetean con cada restart - aceptable para QA |
+| **Health Check Path** | `/api/health` | Endpoint simple que verifica conectividad a BD |
+| **Health Check Interval** | 30 segundos | Intervalo relajado, QA tolera downtime mayor |
+| **Auto-Deploy** | ✅ Activado | Continuous deployment: cada push a `main` actualiza QA |
+| **Auto-Sleep** | ✅ Después de 15 min inactividad | Cold start de ~30s - aceptable para ambiente de testing |
 
 Hago el Deploy y corre correctamente. A la URL del servicio (`https://tiktask-api-qa.onrender.com`) le agrego `/api/health` al final para ver que el backend responde:
 ![alt text](image-19.png)
@@ -268,8 +283,39 @@ Nuevamente no pudimos configurar recursos como CPU y memoria debido a limitacion
 
 **¿Por qué esta configuración para PROD?**
 
+1. **`NODE_ENV=production` vs `development`**: 
+   - En PROD activamos las optimizaciones de Node.js (minificación, caching, sin stack traces completos).
+   - En QA usamos `development` para tener logs más verbosos y debugging más fácil.
+
+2. **Health Check más frecuente en PROD** (10s vs 30s):
+   - PROD requiere detección de fallos más rápida para minimizar downtime.
+   - QA tolera checks menos frecuentes ya que el uptime no es crítico.
+
+33. **Auto-Deploy desactivado en PROD**:
+   - PROD requiere control manual de deployments (se activa vía pipeline aprobado).
+   - QA permite continuous deployment para validaciones rápidas.
+
+4. **Mismo `DATABASE_PATH` pero discos físicamente separados**:
+   - Cada servicio en Render tiene su propio disco persistente aislado.
+   - Garantiza que datos de QA nunca interfieran con PROD.
+
+5. **`JWT_SECRET` diferentes**:
+   - Tokens de QA no son válidos en PROD y viceversa.
+   - Mejora la seguridad al segregar sesiones por ambiente.
 
 ### 4.2. Deploy del Frontend
+
+**Imágenes Docker:**
+- Ambos ambientes usan: `ghcr.io/belutreachi/tiktask-web:latest`
+- Nginx configurado con templates para URLs dinámicas del backend
+
+| Configuración | QA (`tiktask-web-qa`) | PROD (`tiktask-web-prod`) | Justificación |
+|--------------|----------------------|---------------------------|---------------|
+| **Environment** | `qa` | `production` | Segregación lógica en Render |
+| **API_URL** | `https://tiktask-api-qa.onrender.com` | `https://tiktask-api-prod.onrender.com` | Nginx usa esta variable para proxy_pass dinámico |
+| **PORT** | `80` | `80` | Puerto HTTP estándar |
+| **Auto-Deploy** | ✅ Activado | ❌ Desactivado | Consistente con estrategia del backend |
+
 1. Modificar el archivo `nginx.conf`.
 
 Debo cambiar:
@@ -287,7 +333,14 @@ Y borrar esta línea:
 proxy_set_header Host tiktask-api-qa.onrender.com;
 ```
 
-Este cambio es necesario para que cuando despleguemos en PROD, no se rompa el despliegie en QA.
+**Estrategia de configuración dinámica:**
+El frontend utiliza Nginx templates (`nginx.conf.template`) con variables de entorno para configurar el backend URL dinámicamente (permite que no se rompa QA si corro en PROD):
+```nginx
+location /api/ {
+    proxy_pass ${API_URL};
+    # Nginx reemplaza ${API_URL} con la variable de entorno al iniciar
+}
+```
 
 Hago rebuild y push de la imagen del frontend:
 ```bash
@@ -325,12 +378,155 @@ En mi Web Service `tiktask-web-prod` voy a **Settings** → **Deploy** y copio e
 
 ### 4.4. Diferencias de configuración entre QA y PROD
 
+#### Tabla comparativa completa:
+
+| Aspecto | QA | PROD | Justificación |
+|---------|-----|------|---------------|
+| **Servicio usado** | Render Web Service | Render Web Service | Mismo servicio, diferentes instancias |
+| **Imagen Docker** | `ghcr.io/belutreachi/tiktask-api:latest` | `ghcr.io/belutreachi/tiktask-api:latest` | Build once, deploy anywhere |
+| **Environment Render** | `qa` | `production` | Segregación lógica en dashboard |
+| **NODE_ENV** | `development` | `production` | Optimizaciones de Node.js solo en PROD |
+| **DATABASE_PATH** | `/app/data/database.sqlite` | `/app/data/database.sqlite` | Mismo path, discos físicamente aislados |
+| **JWT_SECRET** | `render-qa-secret-key-2024` | `render-prod-secret-key-2024` | Secrets diferentes previenen reutilización de tokens |
+| **Health Check Interval** | 30 segundos | 10 segundos | PROD necesita detección de fallos más rápida |
+| **Health Check Path** | `/api/health` | `/api/health` | Mismo endpoint, funcionalidad idéntica |
+| **Auto-Deploy** | ✅ Activado | ❌ Desactivado | QA: CI continuo. PROD: control manual vía pipeline |
+| **Escalabilidad** | Sin auto-scaling (plan Free) | Sin auto-scaling (plan Free) | Limitación del plan gratuito |
+| **Monitoreo/Logs** | Render Dashboard | Render Dashboard | Logs centralizados por servicio |
+| **Costo estimado** | $0/mes | $0/mes | Ambos en plan Free de Render |
+
+#### Segregación de ambientes:
+
+**Backend:**
+- QA: `https://tiktask-api-qa.onrender.com`
+- PROD: `https://tiktask-api-prod.onrender.com`
+
+**Frontend:**
+- QA: `https://tiktask-web-qa.onrender.com`
+- PROD: `https://tiktask-web-prod.onrender.com`
+
+**Ventajas de usar el mismo servicio:**
+- **Paridad QA-PROD**: El comportamiento en QA predice con precisión el de PROD
+- **Configuración portable**: Mismos Dockerfiles, mismo flujo de deployment
+- **Troubleshooting simplificado**: Logs y métricas en la misma interfaz
+- **Costo cero**: Plan Free suficiente para ambos ambientes
+
+**Desventajas/Limitaciones identificadas:**
+- **Sin auto-scaling**: Plan Free no soporta escalado automático
+- **Auto-sleep después de 15min**: Cold start de ~30s en primer request (aceptable para este TP)
+- **Límites de recursos**: 512 MB RAM, 0.1 vCPU compartido
+- **Sin disco persistente en plan Free**: Usamos `/app/data` en memoria (datos se resetean con cada reinicio)
 
 ## 5. Pipeline CI/CD Completo
 Para este paso decidimos usar **GitHub Actions**.
 
 **Justificación**:
+1. **Integración nativa con el repositorio**:
+   - El código y el pipeline CI/CD viven en el mismo repositorio
+   - No requiere configuración externa ni webhooks manuales
+   - Versionado del pipeline junto con el código (`.github/workflows/`)
 
+2. **Integración perfecta con GHCR**:
+   - Autenticación automática con `secrets.GITHUB_TOKEN`
+   - No requiere crear credentials adicionales
+   - Push de imágenes Docker sin configuración extra
+
+3. **Costo cero para este proyecto**:
+   - 2000 minutos/mes gratis para repositorios privados
+   - Minutos ilimitados para repositorios públicos
+   - Suficiente para múltiples builds diarios
+
+4. **Sintaxis declarativa simple (YAML)**:
+   - Fácil de leer y mantener
+   - Reutilización de actions del marketplace
+   - Menos código boilerplate que otras herramientas
+
+5. **Environments nativos**:
+   - Soporte built-in para QA y PROD
+   - Required reviewers para aprobaciones manuales
+   - Variables y secrets por ambiente
+   - URLs de deployment automáticas
+
+6. **Debugging integrado**:
+   - Logs en tiempo real por step
+   - Re-run de jobs fallidos
+   - Artifacts para descargar outputs
+
+### Comparación con alternativas:
+
+| Herramienta | Ventajas | Por qué no la elegimos |
+|-------------|----------|------------------------|
+| **Azure DevOps** | Poderoso, pipelines complejos | Overkill para este proyecto, curva de aprendizaje más pronunciada |
+| **GitLab CI/CD** | Excelente, runner propio | Repositorio ya está en GitHub, duplicaría esfuerzo |
+| **Jenkins** | Muy flexible, self-hosted | Requiere mantener servidor, configuración compleja |
+| **CircleCI** | Buen free tier (6000 min/mes) | GitHub Actions tiene mejor integración con GHCR |
+| **Travis CI** | Simple para open source | Menos features que GitHub Actions, menor comunidad |
+
+### Arquitectura del pipeline implementado:
+```
+┌─────────────────────────────────────────────────────────────┐
+│  TRIGGER: Push to main/master                               │
+└────────────────┬────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│  JOB 1: Build & Test                                        │
+│  • Checkout code                                            │
+│  • Setup Node.js 18                                         │
+│  • Install dependencies (backend)                           │
+│  • Run tests (backend)                                      │
+└────────────────┬────────────────────────────────────────────┘
+                 │ ✅ Tests pass
+                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│  JOB 2: Build & Push Docker Images                          │
+│  • Login to GHCR (auto con GITHUB_TOKEN)                    │
+│  • Build backend image (multi-platform)                     │
+│  • Push backend to ghcr.io/belutreachi/tiktask-backend      │
+│  • Build frontend image (multi-platform)                    │
+│  • Push frontend to ghcr.io/belutreachi/tiktask-frontend    │
+│  • Tags: latest, commit SHA, run number                     │
+└────────────────┬────────────────────────────────────────────┘
+                 │ ✅ Images pushed
+                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│  JOB 3: Deploy to QA (Render)                               │
+│  Environment: QA                                            │
+│  • Trigger Render Deploy Hook (backend QA)                  │
+│  • Trigger Render Deploy Hook (frontend QA)                 │
+│  • Wait 60s for deployment                                  │
+│  • Verify backend health (GET /api/health)                  │
+│  • Verify frontend health (GET /)                           │
+└────────────────┬────────────────────────────────────────────┘
+                 │ ✅ QA healthy
+                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│  JOB 4: Deploy to Production (Render)                       │
+│  Environment: Production (requires approval)                │
+│  ⏸️  PAUSA → Espera aprobación manual del reviewer          │
+│  ✅ Aprobado por: belutreachi                               │
+│  • Trigger Render Deploy Hook (backend PROD)                │
+│  • Trigger Render Deploy Hook (frontend PROD)               │
+│  • Wait 90s for deployment                                  │
+│  • Verify backend health                                    │
+│  • Verify frontend health                                   │
+│  • Notify success con URLs de ambos ambientes               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Estrategia de deployment implementada:
+
+**Build once, deploy everywhere:**
+- Las imágenes Docker se construyen **una sola vez** en el job 2.
+- Mismas imágenes se despliegan en QA y PROD.
+- Diferenciación por variables de entorno únicamente.
+- Garantiza paridad entre ambientes.
+
+**Quality gates:**
+- Tests automáticos antes de build.
+- Health checks después de cada deployment.
+- Aprobación manual antes de PROD.
+- Rollback posible desde Render dashboard.
 
 ### 5.1. Crear archivo del pipeline
 Primero creo una carpeta llamada `.github/workflows` y adentro creo el archivo `cicd-pipeline.yml`.
@@ -378,3 +574,32 @@ PROD_FRONTEND_URL = https://tiktask-web-prod.onrender.com
 ![alt text](image-56.png)
 
 Luego pusheo todo, espero a que corran los jobs y corroboro que el pipeline haya corrido con éxito:
+
+Me pide **aprobación manual para PROD**:
+![alt text](image-59.png)
+![alt text](image-60.png)
+
+Podemos notar que el **pipeline se ejcutó correctamente** y **ambos ambientes funcionan**:
+![alt text](image-57.png)
+![alt text](image-58.png)
+![alt text](image-61.png)
+
+## 6. Análisis Comparativo QA vs. PROD
+
+| Aspecto | QA | PROD | Justificación |
+|---------|-----|------|---------------|
+| **Servicio usado** | Render Web Service (Free) | Render Web Service (Free) | Mismo servicio garantiza paridad de comportamiento. Simplifica mantenimiento y troubleshooting. |
+| **CPU/Memoria** | 0.1 vCPU compartido / 512 MB RAM | 0.1 vCPU compartido / 512 MB RAM | Plan Free: recursos idénticos. Suficiente para validación funcional y demos. En producción real se escalaría según carga. |
+| **Número de instancias** | 1 instancia | 1 instancia | Plan Free limita a 1 instancia. Para HA en PROD real se necesitarían múltiples instancias (requiere plan pago). |
+| **Escalabilidad** | Sin auto-scaling | Sin auto-scaling | Plan Free no soporta auto-scaling. Escala manual vía upgrade de plan. |
+| **Costos** | $0/mes | $0/mes | Ambos en plan gratuito de Render. Para producción real: Starter ($7/mes) o Standard ($25/mes). |
+| **Monitoreo/Logs** | Render Dashboard (logs básicos) | Render Dashboard (logs básicos) | Logs centralizados por servicio. Retention de 7 días en plan Free. Para PROD real se integraría Datadog/Sentry. |
+| **Disco persistente** | ❌ No disponible (plan Free) | ❌ No disponible (plan Free) | Datos se pierden con cada restart. Solución: migrar a PostgreSQL o plan Starter. |
+| **Auto-sleep** | ✅ Después de 15 min inactividad | ✅ Después de 15 min inactividad | Cold start ~30s. Aceptable para QA/demos, no para PROD real. |
+| **Uptime SLA** | Sin garantía (Best effort) | Sin garantía (Best effort) | Plan Free: sin SLA. Starter: 99% uptime. |
+| **Región** | Oregon (US West) | Oregon (US West) | Misma región reduce latencia entre backend y frontend. |
+| **Health checks** | Intervalo 30s | Intervalo 10s | PROD necesita detección de fallos más rápida para minimizar downtime. |
+| **Deploy strategy** | Auto-deploy al push | Manual via GitHub Actions approval | QA: CI continuo. PROD: control estricto con aprobaciones. |
+| **Variables de entorno** | `NODE_ENV=development`, `LOG_LEVEL=debug` | `NODE_ENV=production`, `LOG_LEVEL=error` | QA: logs verbosos para debugging. PROD: optimizado y solo errores críticos. |
+| **Secrets** | `JWT_SECRET` único para QA | `JWT_SECRET` único para PROD | Tokens de sesión no intercambiables entre ambientes. |
+| **URLs** | `tiktask-api-qa.onrender.com` / `tiktask-web-qa.onrender.com` | `tiktask-api-prod.onrender.com` / `tiktask-web-prod.onrender.com` | Segregación completa por subdominio. |
