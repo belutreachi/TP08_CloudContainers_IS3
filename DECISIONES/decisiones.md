@@ -32,17 +32,16 @@ Creamos los dockerfiles para la creación de imágenes docker.
 
 ## 2. Configuración de Container Registry
 Para esta parte decidimos usar **GitHub Container Registry (GHCR)** y vamos a configurar todo desde la terminal.
+
 **Justificación**: 
-*Ventajas técnicas:*
-- **Integración nativa con GitHub**: El repositorio del proyecto ya está en GitHub, lo que facilita la configuración de GitHub Actions para CI/CD
-- **Coste cero**: Almacenamiento ilimitado para imágenes públicas y generoso para privadas dentro del plan gratuito
-- **Control de visibilidad**: Permite cambiar entre público/privado según el ambiente (QA público, PROD privado si es necesario)
-- **Autenticación simple**: PAT (Personal Access Token) con scopes granulares
-- **Compatibilidad con servicios cloud**: Render, Railway, Fly.io y otros servicios gratuitos soportan pull desde GHCR público
-- **Versionado por tags**: Naming estándar `ghcr.io/<owner>/<image>:<tag>` (ej: `qa-1`, `prod-1`, commit SHA)
+- **Integración nativa con GitHub**: El repositorio del proyecto ya está en GitHub, lo que facilita la configuración de GitHub Actions para CI/CD.
+- **Coste cero**: Almacenamiento ilimitado para imágenes públicas y generoso para privadas dentro del plan gratuito.
+- **Control de visibilidad**: Permite cambiar entre público/privado según el ambiente (QA público, PROD privado si es necesario).
+- **Autenticación simple**: PAT (Personal Access Token) con scopes granulares.
+- **Compatibilidad con servicios cloud**: Render, Railway, Fly.io y otros servicios gratuitos soportan pull desde GHCR público.
+- **Versionado por tags**: Naming estándar `ghcr.io/<owner>/<image>:<tag>` (ej: `latest`, `qa-1`, `prod-1`, commit SHA).
 
 **Alternativas consideradas y por qué no las elegimos:**
-
 | Registry | Ventaja | Desventaja para este TP |
 |----------|---------|-------------------------|
 | Docker Hub | Más conocido | Solo 1 repo privado gratis, rate limits agresivos |
@@ -81,19 +80,19 @@ docker buildx create --use
 docker buildx build \
   --platform linux/amd64 \
   -f backend/Dockerfile \
-  -t ghcr.io/belutreachi/tiktask-api:qa-1 \
+  -t ghcr.io/belutreachi/tiktask-api:latest \
   --load \
   ./backend
 
 # (Opcional) otro tag, por ejemplo el commit corto
 GIT_SHA=$(git rev-parse --short HEAD)
-docker tag ghcr.io/belutreachi/tiktask-api:qa-1 ghcr.io/belutreachi/tiktask-api:$GIT_SHA
+docker tag ghcr.io/belutreachi/tiktask-api:latest ghcr.io/belutreachi/tiktask-api:$GIT_SHA
 ```
 ![alt text](image-6.png)
 
-Hago push:
+Hago push para subir la imagen a GHCR:
 ```bash
-docker push ghcr.io/belutreachi/tiktask-api:qa-1
+docker push ghcr.io/belutreachi/tiktask-api:latest
 docker push ghcr.io/belutreachi/tiktask-api:$GIT_SHA
 ```
 ![alt text](image-7.png)
@@ -104,40 +103,149 @@ Desde la raíz del repo corro lo siguiente en la terminal:
 docker buildx build \
   --platform linux/amd64 \
   -f frontend/Dockerfile \
-  -t ghcr.io/belutreachi/tiktask-web:qa-1 \
+  -t ghcr.io/belutreachi/tiktask-web:latest \
   --load \
   ./frontend
 
 # (Opcional) tag por commit
-docker tag ghcr.io/belutreachi/tiktask-web:qa-1 ghcr.io/belutreachi/tiktask-web:$GIT_SHA
+docker tag ghcr.io/belutreachi/tiktask-web:latest ghcr.io/belutreachi/tiktask-web:$GIT_SHA
 ```
 ![alt text](image-8.png)
 
-Hago push:
+Hago push para subir la imagen a GHCR:
 ```bash
-docker push ghcr.io/belutreachi/tiktask-web:qa-1
+docker push ghcr.io/belutreachi/tiktask-web:latest
 docker push ghcr.io/belutreachi/tiktask-web:$GIT_SHA
 ```
 ![alt text](image-9.png)
 
 ### 2.4. Verificación rápida en GHCR
-Verificamos que se hayan creado correctamente en GitHub Packages:
+Verificamos que se hayan creado correctamente las imagenes en GitHub Packages:
 ![alt text](image-10.png)
-Les cambio a visibilidad a pública para evitar problemas con render:
+Les cambio la visibilidad a pública para evitar problemas con render:
 ![alt text](image-11.png)
 
 ### 2.5. Probar ejecución local tirando desde GHCR (sin mi contexto)
 Para simular un "entorno limpio" y verificar que las imágenes funcionan correctamente desde el registry, creé un archivo `docker-compose.yml` en la raíz del proyecto que utiliza directamente las imágenes subidas a GHCR.
 
 ## 3. Deploy en Ambiente QA
-Para este paso decidimos usar **Render**.
-**Justificación**:
+Para este paso decidimos usar **Render.com**.
 
+**Justificación**:
+- **Costo cero**: Plan gratuito suficiente para QA/Prod.
+- **Deploy automático desde container registry**: Soporta GHCR público sin autenticación.
+- **URLs públicas automáticas**: Acceso inmediato sin configuración de DNS.
+- **Disco persistente gratis**: 1GB suficiente para SQLite en QA y Prod.
+- **Zero-downtime deploys**: Actualizaciones sin caída.
+- **Logs integrados**: Debugging fácil desde dashboard.
+- **Auto-sleep**: Instancias free duermen después de 15min de inactividad (apropiado para QA y Prod).
+
+**Alternativas consideradas:**
+
+| Servicio | Ventaja | Por qué no se usó |
+|----------|---------|-------------------|
+| Fly.io | Más control de infraestructura | Configuración más compleja |
+| Railway.app | $5 crédito mensual | Render tiene mejor free tier |
+| Heroku | Muy conocido | Ya no tiene plan gratuito |
+| Azure ACI | Integración con Azure | Costo desde el primer minuto |
 
 ### 3.1. Crear cuenta en Render
 Fui a https://render.com y me registré usando mi cuenta de GitHub. 
 
 ### 3.2. Deploy del Backend
-1. Crear Web Service para el Backend.
-En el board de services de Render voy a **Web Services** → **New Web Service**
+Crear **Web Service** para el Backend:
+
+En el board de services de Render voy a **Web Services** → **New Web Service**:
 ![alt text](image-12.png)
+Elijo **Existing image** y completo con la **URL de la imagen**. Luego hago click en Connect:
+![alt text](image-13.png)
+Luego completo los campos de **configuración básica** con lo siguiente:
+![alt text](image-14.png)
+![alt text](image-15.png)
+Después agrego **Environment variables**:
+![alt text](image-32.png)
+Por último completo las **configuraciones avanzadas** con el path para **health checks**:
+![alt text](image-17.png)
+
+No pudimos configurar recursos como CPU y memoria ya que esas configuraciones no están disponibles para el plan gratuito de Render.
+
+Hago el Deploy y corre correctamente. A la URL del servicio (`https://tiktask-api-qa.onrender.com`) le agrego `/api/health` al final para ver que el backend responde:
+![alt text](image-19.png)
+![alt text](image-31.png)
+
+### 3.3. Deploy del Frontend
+1. Primero debo actualizar el archivo `nginx.conf`:
+
+Cambio: 
+```bash
+proxy_pass http://backend:3000;
+```
+
+Por:
+```bash
+proxy_pass https://tiktask-api-qa.onrender.com;
+```
+
+Hago rebuild y push de la imagen del frontend:
+```bash
+# Build con la nueva configuración
+docker buildx build \
+  --platform linux/amd64 \
+  -f frontend/Dockerfile \
+  -t ghcr.io/belutreachi/tiktask-web:latest \
+  --load \
+  ./frontend
+
+# Push
+docker push ghcr.io/belutreachi/tiktask-web:latest
+```
+
+2. Creo el Web Service para el Frontend:
+
+Completo con la **URL de la imagen** y hago click en Connect:
+![alt text](image-20.png)
+Completo la **configuración básica**:
+![alt text](image-21.png)
+![alt text](image-22.png)
+
+No agrego Environment Variables porque ya está todo hardcodeado en el archivo `nginx.conf`.
+Nuevamente debido al plan gratuito tampoco puedo configurar recursos.
+
+Hago el Deploy:
+![alt text](image-23.png)
+Abro la URL de render y aparece correctamente la página:
+![alt text](image-24.png)
+![alt text](image-25.png)
+Pruebo algunas funcionalidades y todo funciona correctamente:
+![alt text](image-26.png)
+![alt text](image-27.png)
+![alt text](image-28.png)
+
+Además, también creé un **environment de QA** para que los servicios de QA estén en ese ambiente, separados de los de PROD que hice después:
+![alt text](image-30.png) 
+
+## 4. Deploy en Ambiente PROD
+Para esta parte decidimos seguir trabajando con **Render.com** por los siguientes motivos:
+- **Madurez del stack**: ya validamos que Render funciona perfectamente con nuestros contenedores GHCR.
+- **Separación lógica mediante environments**: Render tiene feature nativo de environments que separa completamente QA de PROD.
+- **Continuous deployment simplificado**: mismo workflow de CI/CD, solo cambiando tags (qa-latest vs prod-latest).
+- **Monitoreo unificado**: dashboard único para ambos ambientes.
+
+### 4.1. Deploy del Backend
+Primero creo un nuevo environment en el Dashboard de mi proyecto llamado **PROD**:
+![alt text](image-33.png)
+Voy a **Create new service** → **Web Services** → **New Web Service**. Elijo **Existing Image** y copio la URL de mi imagen del backend:
+![alt text](image-34.png)
+Hago click en **Connect** y completo la **configuración básica**:
+![alt text](image-35.png)
+![alt text](image-36.png)
+Configuro **Environment variables** distintas a las de **QA**:
+Por último completo las **configuraciones avanzadas** de la siguiente manera:
+![alt text](image-37.png)
+Hago click en **Deploy Web Service** y noto que corre exitosamente. A la URL del servicio (`https://tiktask-api-prod.onrender.com`) le agrego `/api/health` al final para ver que el backend responde:
+![alt text](image-38.png)
+![alt text](image-39.png)
+
+Nuevamente no pudimos configurar recursos como CPU y memoria debido a limitaciones del plan gratuito de Render.
+
+### 4.2. Deploy del Frontend
