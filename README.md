@@ -4,19 +4,8 @@
 
 Aplicación web de gestión de tareas construida con Node.js, Express y SQLite, implementada con contenedores Docker y CI/CD completo.
 
----
 
-## 📚 Documentación del TP8
-
-### 🎯 Para completar el TP8, seguí esta guía paso a paso:
-➡️ **[GUIA_TP8.md](./GUIA_TP8.md)** - Guía completa con instrucciones detalladas
-
-### 📋 Consignas originales del TP:
-➡️ **[TP8_consignas.MD](./TP8_consignas.MD)** - Requisitos y consignas del trabajo práctico
-
----
-
-## 🚀 Quick Start con Docker
+## Quick Start con Docker
 
 ### Probar localmente (recomendado)
 
@@ -31,14 +20,23 @@ Acceder a: **http://localhost**
 
 ```
 TP08_CloudContainers_IS3/
-├── backend/              # API Node.js + Express
-│   ├── Dockerfile       # Imagen Docker del backend
-│   └── ...
-├── frontend/            # Frontend HTML/CSS/JS + Nginx
-│   ├── Dockerfile       # Imagen Docker del frontend
-│   └── ...
-├── docker-compose.yml   # Orquestación de servicios
-└── .github/workflows/   # CI/CD con GitHub Actions
+├── backend/                    # API Node.js + Express
+│   ├── src/                   # Código fuente
+│   ├── tests/                 # Tests unitarios e integración
+│   ├── Dockerfile             # Imagen Docker del backend
+│   ├── server.js              # Servidor Express
+│   └── package.json           # Dependencias
+├── frontend/                   # Frontend HTML/CSS/JS + Nginx
+│   ├── Dockerfile             # Imagen Docker del frontend
+│   ├── nginx.conf             # Configuración Nginx
+│   ├── index.html             # Aplicación SPA
+│   └── app.js                 # Lógica del cliente
+├── docker-compose.yml          # Orquestación local
+├── render.yaml                 # Configuración de servicios en Render
+├── .github/workflows/          # CI/CD con GitHub Actions
+│   └── cicd-pipeline.yml      # Pipeline completo
+├── SETUP_GUIDE.md              # Guía de configuración paso a paso
+└── README.md                   # Este archivo
 ```
 
 ### Opciones de ejecución
@@ -65,37 +63,47 @@ docker run -p 80:80 tiktask-frontend
 
 ---
 
-## 🏗️ Arquitectura TP8
+## Arquitectura TP8
 
-**Stack implementado (Ejemplo 1 de las consignas):**
+**Stack implementado (Opción 1 - GitHub Stack):**
 
 ```
 GitHub Repository
   ↓
 GitHub Actions (CI/CD)
-  ↓ Build + Test
-  ↓ Docker Build + Push
+  ↓ Build & Test Backend
+  ↓ Build Docker Images (Frontend + Backend)
+  ↓ Push to GitHub Container Registry (GHCR)
   ↓
-GitHub Container Registry (ghcr.io)
-  ↓
-Deploy automático → Render.com QA (Free)
-  ↓ Approval Gate
-Deploy manual → Render.com PROD (Starter $7/mo)
+Deploy automático → Render QA
+  ├─ Frontend QA (Free)
+  └─ Backend QA (Free)
+  ↓ Approval Gate (Manual)
+Deploy manual → Render PROD
+  ├─ Frontend PROD (Starter $7/mo)
+  └─ Backend PROD (Starter $7/mo)
 ```
 
-**Costo total: $7/mes**
+**Servicios totales:** 4 servicios (2 en QA, 2 en PROD)
+**Imágenes Docker:** 2 imágenes (reutilizadas en ambos ambientes)
+
+**Costo total: $14/mes** (o puedes usar Free tier en ambos ambientes = $0)
 
 ### Componentes
 
-- ✅ **Container Registry**: GitHub Container Registry (gratis)
-- ✅ **CI/CD**: GitHub Actions (gratis)
-- ✅ **QA Environment**: Render.com Free tier (gratis)
-- ✅ **PROD Environment**: Render.com Starter ($7/mes)
-- ✅ **Pipeline completo**: Build → Test → Deploy QA → Approval → Deploy PROD
+- **Container Registry**: GitHub Container Registry (gratis)
+- **CI/CD**: GitHub Actions (gratis)
+- **QA Environment**: Render.com
+  - Frontend QA (Free tier)
+  - Backend QA (Free tier)
+- **PROD Environment**: Render.com
+  - Frontend PROD (Starter $7/mes)
+  - Backend PROD (Starter $7/mes)
+- **Pipeline completo**: Build → Test → Push Images → Deploy QA → Approval → Deploy PROD
 
 ---
 
-## 💻 Características de la Aplicación
+## Características de la Aplicación
 
 - ✅ Autenticación de usuarios (registro e inicio de sesión)
 - ✅ Gestión de tareas (crear, editar, eliminar, completar)
@@ -105,7 +113,7 @@ Deploy manual → Render.com PROD (Starter $7/mo)
 - ✅ API RESTful segura con JWT
 - ✅ Base de datos SQLite
 
-## 🛠️ Tecnologías
+## Tecnologías
 
 ### Backend
 - **Node.js**: Runtime de JavaScript
@@ -126,7 +134,7 @@ Deploy manual → Render.com PROD (Starter $7/mo)
 
 ---
 
-## 🧪 Desarrollo Local (sin Docker)
+## Desarrollo Local (sin Docker)
 
 ### Requisitos
 - Node.js 18+
@@ -157,7 +165,7 @@ El servidor se ejecutará en `http://localhost:3000`
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Ejecutar todos los tests
@@ -170,21 +178,7 @@ npm run test:coverage
 
 ---
 
-## 📖 Más Información
-
-- **Guía completa del TP8**: [GUIA_TP8.md](./GUIA_TP8.md)
-- **Consignas originales**: [TP8_consignas.MD](./TP8_consignas.MD)
-- **Reportar issues**: [GitHub Issues](https://github.com/baujuncos/TP08_CloudContainers_IS3/issues)
-
----
-
 ## 👥 Autores
 
 **Belén Treachi y Bautista Juncos**  
 Ingeniería de Software 3 - TP8
-
----
-
-## 📄 Licencia
-
-Este proyecto está licenciado bajo la Licencia MIT.
