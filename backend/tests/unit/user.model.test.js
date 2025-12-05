@@ -28,7 +28,7 @@ describe('User Model', () => {
       const user = await User.create(username, email, password, 'admin');
 
       expect(user).toHaveProperty('id');
-      expect(user.role).toBe('superadmin');
+      expect(user.role).toBe('admin');
     });
   });
 
